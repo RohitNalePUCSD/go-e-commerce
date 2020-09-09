@@ -2,25 +2,34 @@ package db
 
 import (
 	"context"
+	"database/sql/driver"
+	"encoding/json"
 
+	"github.com/jmoiron/sqlx/types"
 	logger "github.com/sirupsen/logrus"
 )
 
 const (
 	getProductByIdQuery = `SELECT
-	p.id, p.name, p.des, p.price, p.discount, p.available_quantity, p.category_Id, pi.image_url
+	p.id, p.name, p.des, p.price, p.discount, p.available_quantity, p.category_Id, pi.image_url,
+	c.category_name 
 	FROM
 	products p
 	INNER JOIN productimage pi 
 	ON p.id = pi.product_id
+	INNER JOIN category c
+	ON p.category_Id = c.category_id
 	WHERE p.id = $1 LIMIT 1`
 
 	listProduct = `SELECT
-	p.id, p.name, p.des, p.price, p.discount, p.available_quantity, p.category_Id, pi.image_url
+	p.id, p.name, p.des, p.price, p.discount, p.available_quantity, p.category_Id, pi.image_url,
+	c.category_name 
 	FROM
 	products p
 	INNER JOIN productimage pi 
-	ON p.id = pi.product_id`
+	ON p.id = pi.product_id
+	INNER JOIN category c
+	ON p.category_Id = c.category_id`
 
 	deleteProductIdQuery = `DELETE FROM products WHERE id = $1`
 
@@ -35,15 +44,59 @@ const (
 	 WHERE product_id = $2;`
 )
 
+type JSONTags []string
+
+func (tags *JSONTags) Scan(src interface{}) error {
+	var jt types.JSONText
+
+	if err := jt.Scan(src); err != nil {
+		return err
+	}
+
+	if err := jt.Unmarshal(tags); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (tags *JSONTags) Value() (driver.Value, error) {
+	var jt types.JSONText
+
+	data, err := json.Marshal((*[]string)(tags))
+	if err != nil {
+		return nil, err
+	}
+
+	if err := jt.UnmarshalJSON(data); err != nil {
+		return nil, err
+	}
+
+	return jt.Value()
+}
+
+func (tags *JSONTags) MarshalJSON() ([]byte, error) {
+	return json.Marshal((*[]string)(tags))
+}
+
+func (tags *JSONTags) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, (*[]string)(tags)); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 type Product struct {
-	Id                 int     `db:"id" json:"Id"`
-	Name               string  `db:"name" json:"Name"`
-	Des                string  `db:"des" json:"Des"`
-	Price              float32 `db:"price" json:"Price"`
-	Discount           float32 `db:"discount" json:"Discount"`
-	Available_quantity int     `db:"available_quantity" json:"Available_quantity"`
-	Category_Id        int     `db:"category_id" json:"Category"`
-	ProductImage_Url   string  `db:"image_url" json:"PrdouctImage_url"`
+	Id                 int       `db:"id" json:"Id"`
+	Name               string    `db:"name" json:"Name"`
+	Des                string    `db:"des" json:"Des"`
+	Price              float32   `db:"price" json:"Price"`
+	Discount           float32   `db:"discount" json:"Discount"`
+	Available_quantity int       `db:"available_quantity" json:"Available_quantity"`
+	Category_Id        int       `db:"category_id" json:"Category"`
+	Category_Name      string    `db:"category_name" json:"Category_Name"`
+	ProductImage_Url   *JSONTags `db:"image_url" json:"PrdouctImage_url"`
 }
 
 func (s *pgStore) ListProducts(ctx context.Context) (products []Product, err error) {
