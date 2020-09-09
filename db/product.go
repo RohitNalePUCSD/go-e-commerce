@@ -7,14 +7,32 @@ import (
 )
 
 const (
-	getProductByIdQuery  = `SELECT * FROM products WHERE id=$1 LIMIT 1`
-	listProduct          = `SELECT * FROM products ORDER BY name ASC`
+	getProductByIdQuery = `SELECT
+	p.id, p.name, p.des, p.price, p.discount, p.available_quantity, p.category_Id, pi.image_url
+	FROM
+	products p
+	INNER JOIN productimage pi 
+	ON p.id = pi.product_id
+	WHERE p.id = $1 LIMIT 1`
+
+	listProduct = `SELECT
+	p.id, p.name, p.des, p.price, p.discount, p.available_quantity, p.category_Id, pi.image_url
+	FROM
+	products p
+	INNER JOIN productimage pi 
+	ON p.id = pi.product_id`
+
 	deleteProductIdQuery = `DELETE FROM products WHERE id = $1`
-	getProductQuery      = `SELECT id, name, des,price,discount,available_quantity, category_id
-		FROM products WHERE id=$1 `
+
+	getProductQuery = `SELECT id, name, des,price,discount,available_quantity, category_id
+	FROM products WHERE id=$1 `
+
 	updateProductQuery = `UPDATE products SET (
 			name, des, price, discount, available_quantity, category_id
 			) =  ($1, $2, $3, $4, $5, $6) where id = $7`
+
+	updateImageQuery = `UPDATE productimage SET image_url=$1
+	 WHERE product_id = $2;`
 )
 
 type Product struct {
@@ -25,6 +43,7 @@ type Product struct {
 	Discount           float32 `db:"discount" json:"Discount"`
 	Available_quantity int     `db:"available_quantity" json:"Available_quantity"`
 	Category_Id        int     `db:"category_id" json:"Category"`
+	ProductImage_Url   string  `db:"image_url" json:"PrdouctImage_url"`
 }
 
 func (s *pgStore) ListProducts(ctx context.Context) (products []Product, err error) {
@@ -108,7 +127,7 @@ func (s *pgStore) DeleteProductById(ctx context.Context, id int) (err error) {
 func (s *pgStore) UpdateProductById(ctx context.Context, product Product, id int) (updatedProduct Product, err error) {
 
 	var dbProduct Product
-	err = s.db.Get(&dbProduct, getProductQuery, id)
+	err = s.db.Get(&dbProduct, getProductByIdQuery, id)
 	if err != nil {
 		logger.WithField("err", err.Error()).Error("Error while getting product ")
 		return
@@ -129,7 +148,17 @@ func (s *pgStore) UpdateProductById(ctx context.Context, product Product, id int
 		return
 	}
 
-	err = s.db.Get(&updatedProduct, getProductQuery, id)
+	_, err = s.db.Exec(updateImageQuery,
+		product.ProductImage_Url,
+		id,
+	)
+
+	if err != nil {
+		logger.WithField("err", err.Error()).Error("Error updating product image")
+		return
+	}
+
+	err = s.db.Get(&updatedProduct, getProductByIdQuery, id)
 	if err != nil {
 		logger.WithField("err", err.Error()).Error("Error while getting product ")
 		return
