@@ -83,7 +83,6 @@ func (tags *JSONTags) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, (*[]string)(tags)); err != nil {
 		return err
 	}
-
 	return nil
 }
 
